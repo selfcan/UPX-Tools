@@ -1,0 +1,286 @@
+/* 字体定义 */
+@font-face {
+    font-family: 'HarmonyOS Sans SC';
+    src: url('../font/HarmonyOS_Sans_SC_Regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* 全局样式 */
+:root {
+    --border-radius: 0.3rem;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+body {
+    font-family: 'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+        'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 呼吸灯效果 */
+@keyframes breathing {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.9);
+    }
+}
+
+.breathing-light {
+    animation: breathing 2s ease-in-out infinite;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #5a5a5a;
+}
+
+/* 日志输出区域 */
+#log-output {
+    font-family: 'HarmonyOS Sans SC', 'Consolas', 'Monaco', 'Courier New', monospace;
+    overflow: overlay; /* 使用overlay避免内容被滚动条遮挡 */
+}
+
+/* 日志输出区域滚动条 */
+#log-output::-webkit-scrollbar {
+    width: 6px;
+}
+
+#log-output::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 0.3rem;
+}
+
+#log-output::-webkit-scrollbar-thumb {
+    background: rgba(74, 74, 74, 0.6);
+    border-radius: 0.3rem;
+}
+
+#log-output::-webkit-scrollbar-thumb:hover {
+    background: rgba(90, 90, 90, 0.8);
+}
+
+/* 日志高亮样式 */
+#log-output .log-highlight {
+    color: #ffffff;
+    font-weight: 500;
+}
+
+/* 日志行样式 */
+.log-line {
+    margin-bottom: 4px;
+    line-height: 1.6;
+    word-wrap: break-word;
+    word-break: break-all;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.log-info {
+    color: #10b981;
+}
+
+.log-error {
+    color: #ef4444;
+}
+
+.log-warning {
+    color: #f59e0b;
+}
+
+.log-success {
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* 按钮动画 */
+button {
+    transition: all 0.2s ease;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* 模式选择按钮激活状态 */
+.mode-active {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+}
+
+.mode-inactive {
+    border-color: #d1d5db !important;
+    background-color: white !important;
+    color: #6b7280 !important;
+}
+
+/* 禁用选择 */
+.select-none {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* 输入框聚焦效果 */
+input:focus, select:focus {
+    outline: none;
+}
+
+/* 自定义复选框 */
+input[type="checkbox"] {
+    cursor: pointer;
+    outline: none;
+}
+
+input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 滑动条样式 */
+input[type="range"].slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(to right, #93c5fd 0%, #3b82f6 50%, #1d4ed8 100%);
+    border-radius: 5px;
+    outline: none;
+    transition: opacity 0.2s;
+    font-family: inherit;
+}
+
+input[type="range"].slider:hover {
+    opacity: 0.9;
+}
+
+/* 滑块样式 - Webkit浏览器 */
+input[type="range"].slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: white;
+    border: 3px solid #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+}
+
+input[type="range"].slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+input[type="range"].slider::-webkit-slider-thumb:active {
+    transform: scale(1.05);
+    background: #eff6ff;
+}
+
+/* 滑块样式 - Firefox */
+input[type="range"].slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: white;
+    border: 3px solid #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+}
+
+input[type="range"].slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+input[type="range"].slider::-moz-range-thumb:active {
+    transform: scale(1.05);
+    background: #eff6ff;
+}
+
+/* 加载动画 */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* 渐入动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* 进度条 */
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+/* 文件拖放区域 */
+.drop-zone {
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.drop-zone.drag-over {
+    transform: scale(1.02) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+    border-width: 3px;
+}
+
+#compress-btn.drag-over {
+    background: linear-gradient(to bottom right, #dbeafe, #bfdbfe) !important;
+    border-color: #2563eb !important;
+}
+
+#decompress-btn.drag-over {
+    background: linear-gradient(to bottom right, #d1fae5, #a7f3d0) !important;
+    border-color: #059669 !important;
+}
