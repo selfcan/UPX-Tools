@@ -7,6 +7,12 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use encoding_rs::GBK;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct UpxOptions {
     mode: String,
@@ -15,6 +21,7 @@ struct UpxOptions {
     compression_level: String,
     backup: bool,
     ultra_brute: bool,
+    force: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,53 +31,42 @@ struct ScanFolderOptions {
 }
 
 // 获取UPX可执行文件路径
-fn get_upx_path() -> PathBuf {
-    // 尝试1: 使用打包后的upx (在exe同目录下)
+fn get_upx_path() -> Option<PathBuf> {
+    // 打包后的位置
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            let bundled_upx = exe_dir.join("upx.exe");
-            if bundled_upx.exists() {
-                return bundled_upx;
+            let upx = exe_dir.join("_up_/upx/upx.exe");
+            if upx.exists() {
+                return Some(upx);
             }
         }
     }
     
-    // 尝试2: 使用开发环境的upx (src-tauri/../upx/upx.exe)
-    let dev_upx = PathBuf::from("../../upx/upx.exe");
+    // 开发环境
+    let dev_upx = PathBuf::from("../upx/upx.exe");
     if dev_upx.exists() {
-        return dev_upx;
+        return Some(dev_upx);
     }
     
-    // 尝试3: 另一个开发环境路径
-    let dev_upx2 = PathBuf::from("../upx/upx.exe");
-    if dev_upx2.exists() {
-        return dev_upx2;
-    }
-    
-    // 尝试4: 使用系统PATH中的upx (降级方案)
-    PathBuf::from("upx")
+    None
 }
 
 #[tauri::command]
 async fn process_upx(options: UpxOptions) -> Result<String, String> {
     // 获取UPX可执行文件路径
-    let upx_path = get_upx_path();
+    let upx_path = get_upx_path().ok_or("未找到 UPX 工具！请确保安装完整")?;
     
     // 检查 UPX 是否可用
     let mut upx_check = Command::new(&upx_path);
     
     // 在 Windows 上隐藏控制台窗口
     #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        upx_check.creation_flags(CREATE_NO_WINDOW);
-    }
+    upx_check.creation_flags(CREATE_NO_WINDOW);
     
     let upx_check = upx_check.arg("--version").output();
     
     if upx_check.is_err() {
-        return Err("未找到 UPX 工具！".to_string());
+        return Err("UPX 工具无法执行！".to_string());
     }
 
     // 检查输入文件是否存在
@@ -101,11 +97,7 @@ async fn process_upx(options: UpxOptions) -> Result<String, String> {
     
     // 在 Windows 上隐藏控制台窗口
     #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    cmd.creation_flags(CREATE_NO_WINDOW);
     
     // 判断是否覆盖原文件
     let is_overwrite = options.input_file == options.output_file;
@@ -122,6 +114,11 @@ async fn process_upx(options: UpxOptions) -> Result<String, String> {
                 cmd.arg(format!("-{}", options.compression_level));
             }
             
+            // 添加强制压缩参数
+            if options.force {
+                cmd.arg("--force");
+            }
+            
             if is_overwrite {
                 // 直接覆盖原文件，不使用 -o 参数
                 cmd.arg(&options.input_file);
@@ -136,6 +133,11 @@ async fn process_upx(options: UpxOptions) -> Result<String, String> {
         "decompress" => {
             // 脱壳模式
             cmd.arg("-d");
+            
+            // 添加强制压缩参数（脱壳时也可能需要）
+            if options.force {
+                cmd.arg("--force");
+            }
             
             if is_overwrite {
                 // 直接覆盖原文件
@@ -267,17 +269,13 @@ fn scan_folder(options: ScanFolderOptions) -> Result<Vec<String>, String> {
 // 获取UPX版本
 #[tauri::command]
 fn get_upx_version() -> Result<String, String> {
-    let upx_path = get_upx_path();
+    let upx_path = get_upx_path().ok_or("未找到 UPX 工具！")?;
     
     let mut cmd = Command::new(&upx_path);
     
     // 在 Windows 上隐藏控制台窗口
     #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    cmd.creation_flags(CREATE_NO_WINDOW);
     
     match cmd.arg("--version").output() {
         Ok(output) => {
@@ -293,11 +291,58 @@ fn get_upx_version() -> Result<String, String> {
     }
 }
 
+// 刷新图标缓存
+#[tauri::command]
+#[allow(dead_code)]
+async fn refresh_icon_cache() -> Result<(), String> {
+    // 后台执行刷新
+    tokio::task::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
+        {
+            // 1. 关闭 Explorer
+            let _ = Command::new("taskkill")
+                .args(&["/f", "/im", "explorer.exe"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            
+            // 2. 删除图标缓存
+            if let Ok(userprofile) = std::env::var("USERPROFILE") {
+                let cache_db = format!("{}\\AppData\\Local\\IconCache.db", userprofile);
+                let _ = fs::remove_file(&cache_db);
+                
+                // 删除缩略图缓存
+                let explorer_path = format!("{}\\AppData\\Local\\Microsoft\\Windows\\Explorer", userprofile);
+                if let Ok(entries) = fs::read_dir(&explorer_path) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if name.starts_with("thumbcache_") {
+                                let _ = fs::remove_file(&path);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            
+            // 3. 重启 Explorer
+            let _ = Command::new("explorer.exe")
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        }
+    });
+    
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![process_upx, scan_folder, get_upx_version])
+        .invoke_handler(tauri::generate_handler![process_upx, scan_folder, get_upx_version, refresh_icon_cache])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -13,10 +13,12 @@ const overwriteCheckbox = document.getElementById('overwrite');
 const backupCheckbox = document.getElementById('backup');
 const ultraBruteCheckbox = document.getElementById('ultra-brute');
 const includeSubfoldersCheckbox = document.getElementById('include-subfolders');
+const forceCompressCheckbox = document.getElementById('force-compress');
 const logOutput = document.getElementById('log-output');
 const settingsModal = document.getElementById('settings-modal');
 const settingsBtn = document.getElementById('settings-btn');
 const closeSettingsBtn = document.getElementById('close-settings');
+const refreshIconBtn = document.getElementById('refresh-icon-btn');
 
 // 窗口控制按钮
 const minimizeBtn = document.getElementById('titlebar-minimize');
@@ -84,6 +86,11 @@ function initWindowControls() {
 
 // 操作按钮初始化
 function initOperationButtons() {
+    // 刷新图标缓存按钮
+    refreshIconBtn.addEventListener('click', async () => {
+        await handleRefreshIcon();
+    });
+
     // 设置按钮 - 显示全局设置
     settingsBtn.addEventListener('click', () => {
         showSettingsModal();
@@ -496,11 +503,16 @@ async function processUpx(mode, inputFile, outputFile) {
             output_file: outputFile,
             compression_level: getCompressionLevel(),
             backup: backupCheckbox.checked,
-            ultra_brute: ultraBruteCheckbox.checked
+            ultra_brute: ultraBruteCheckbox.checked,
+            force: forceCompressCheckbox.checked
         };
 
         if (ultraBruteCheckbox.checked) {
             addLog('已启用极限压缩模式', 'info');
+        }
+        
+        if (forceCompressCheckbox.checked) {
+            addLog('已启用强制压缩模式', 'warning');
         }
 
         addLog(`开始${mode === 'compress' ? '加壳压缩' : '脱壳解压'}...`, 'info');
@@ -512,6 +524,17 @@ async function processUpx(mode, inputFile, outputFile) {
         
     } catch (error) {
         addLog(`处理失败: ${error}`, 'error');
+    }
+}
+
+// 刷新图标缓存
+async function handleRefreshIcon() {
+    try {
+        addLog('正在刷新图标缓存...', 'info');
+        await invoke('refresh_icon_cache');
+        addLog('图标缓存刷新完成', 'success');
+    } catch (error) {
+        addLog(`刷新失败: ${error}`, 'error');
     }
 }
 
