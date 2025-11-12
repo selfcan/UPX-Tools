@@ -22,6 +22,7 @@ const settingsModal = document.getElementById('settings-modal');
 const settingsBtn = document.getElementById('settings-btn');
 const closeSettingsBtn = document.getElementById('close-settings');
 const refreshIconBtn = document.getElementById('refresh-icon-btn');
+const appTitle = document.getElementById('app-title');
 
 // 窗口控制按钮
 const minimizeBtn = document.getElementById('titlebar-minimize');
@@ -33,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initWindowControls();
     initOperationButtons();
     initCompressionLevelSlider();
+    initTitleClick();
     preventRefresh();
     await setupDragAndDrop();
     
@@ -92,6 +94,23 @@ function initWindowControls() {
 
     closeBtn.addEventListener('click', () => {
         appWindow.close();
+    });
+}
+
+// 标题点击事件
+function initTitleClick() {
+    appTitle.addEventListener('click', async (e) => {
+        // 阻止事件冒泡，避免触发拖动
+        e.stopPropagation();
+
+        try {
+            // 使用 Tauri 的 shell 插件打开 URL
+            const { open } = window.__TAURI__.shell;
+            await open('https://github.com/Y-ASLant/UPX-GUI');
+            addLog('已在浏览器中打开 GitHub 仓库', 'info');
+        } catch (error) {
+            addLog(`打开链接失败: ${error}`, 'error');
+        }
     });
 }
 
