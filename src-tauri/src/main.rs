@@ -113,7 +113,7 @@ async fn process_upx(options: UpxOptions) -> Result<String, String> {
             fs::metadata(&options.input_file).map_err(|e| format!("无法读取文件属性: {}", e))?;
 
         if metadata.permissions().readonly() {
-            return Err(format!("文件为只读，请先修改文件属性"));
+            return Err("文件为只读，请先修改文件属性".to_string());
         }
     }
 
@@ -334,7 +334,7 @@ async fn refresh_icon_cache() -> Result<(), String> {
         {
             // 1. 关闭 Explorer
             let _ = Command::new("taskkill")
-                .args(&["/f", "/im", "explorer.exe"])
+                .args(["/f", "/im", "explorer.exe"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .output();
 
