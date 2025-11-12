@@ -1,4 +1,4 @@
-# UPX-GUI
+# UPX-Tools
 
 一个基于 Tauri 开发的 UPX 压缩工具图形界面，小而美。
 
