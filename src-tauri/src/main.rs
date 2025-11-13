@@ -216,27 +216,110 @@ async fn process_upx(options: UpxOptions) -> Result<String, String> {
                         100
                     };
 
+                    // 过滤并格式化输出信息
+                    let upx_output = format_upx_output(&stdout, &stderr);
+
                     let result = format!(
-                        "操作成功!\n输出: {}\n原始大小: {}\n处理后大小: {}\n压缩率: {}%\n\nUPX 输出:\n{}{}",
+                        "操作成功!\n输出: {}\n原始大小: {}\n处理后大小: {}\n压缩率: {}%{}",
                         output_file_clone,
                         format_bytes(original_size_clone),
                         format_bytes(output_size),
                         ratio,
-                        stdout,
-                        stderr
+                        upx_output
                     );
                     Ok(result)
                 } else {
-                    Err(format!("UPX 执行失败:\n{}{}", stdout, stderr))
+                    // 解析并优化错误信息
+                    let error_msg = parse_upx_error(&stdout, &stderr);
+                    Err(error_msg)
                 }
             }
-            Err(e) => {
-                Err(format!("执行 UPX 命令失败: {}", e))
-            }
+            Err(e) => Err(format!("执行 UPX 命令失败: {}", e)),
         }
     })
     .await
     .map_err(|e| format!("任务执行错误: {}", e))?
+}
+
+// 格式化 UPX 成功输出信息
+fn format_upx_output(stdout: &str, stderr: &str) -> String {
+    let combined = format!("{}{}", stdout, stderr);
+
+    // 过滤掉不需要的行
+    let output_lines: Vec<&str> = combined
+        .lines()
+        .filter(|line| {
+            let l = line.trim();
+            !l.is_empty()
+                && !l.starts_with("---")
+                && !l.starts_with("File size")
+                && !l.starts_with("Ratio")
+                && !l.starts_with("Format")
+                && !l.starts_with("Name")
+                && !l.starts_with("Ultimate Packer")
+                && !l.starts_with("Copyright")
+                && !l.starts_with("UPX ")
+        })
+        .collect();
+
+    if output_lines.is_empty() {
+        return String::new();
+    }
+
+    format!("\n\nUPX 输出:\n{}", output_lines.join("\n"))
+}
+
+// 解析并优化 UPX 错误信息
+fn parse_upx_error(stdout: &str, stderr: &str) -> String {
+    let combined = format!("{}{}", stdout, stderr);
+
+    // 常见错误模式匹配
+    if combined.contains("AlreadyPackedException") || combined.contains("already packed") {
+        return "[错误] 文件已经被 UPX 加壳过了\n\n解决方案:\n  - 如果要重新压缩，请先使用「脱壳解压」功能\n  - 或者选择其他未加壳的文件".to_string();
+    }
+
+    if combined.contains("NotPackedException") || combined.contains("not packed") {
+        return "[错误] 文件未被 UPX 加壳，无法脱壳\n\n解决方案:\n  - 请确认文件是否使用 UPX 加壳\n  - 或者选择「加壳压缩」功能".to_string();
+    }
+
+    if combined.contains("CantPackException") {
+        return "[错误] 无法压缩此文件\n\n可能原因:\n  - 文件格式不支持\n  - 文件已损坏\n  - 文件受保护（尝试启用「强制压缩」选项）".to_string();
+    }
+
+    if combined.contains("OverlayException") {
+        return "[错误] 文件包含附加数据（Overlay）\n\n解决方案:\n  - 某些文件在末尾附加了额外数据\n  - 尝试启用「强制压缩」选项\n  - 或使用其他工具移除附加数据".to_string();
+    }
+
+    if combined.contains("IOException") || combined.contains("can't open") {
+        return "[错误] 文件访问失败\n\n可能原因:\n  - 文件被其他程序占用\n  - 文件权限不足\n  - 文件路径包含特殊字符".to_string();
+    }
+
+    if combined.contains("NotCompressibleException") {
+        return "[错误] 文件无法压缩\n\n可能原因:\n  - 文件已经高度压缩\n  - 压缩后反而会变大\n  - UPX 自动跳过了此文件".to_string();
+    }
+
+    // 如果没有匹配到特定错误，返回简化的原始信息
+    let error_lines: Vec<&str> = combined
+        .lines()
+        .filter(|line| {
+            let l = line.trim();
+            !l.is_empty()
+                && !l.starts_with("---")
+                && !l.starts_with("File size")
+                && !l.starts_with("Ratio")
+                && !l.starts_with("Format")
+                && !l.starts_with("Name")
+        })
+        .collect();
+
+    if error_lines.is_empty() {
+        return "[错误] UPX 处理失败\n\n请检查文件是否正常，或尝试其他选项".to_string();
+    }
+
+    format!(
+        "[错误] UPX 处理失败\n\n错误信息:\n{}",
+        error_lines.join("\n")
+    )
 }
 
 // 格式化字节大小

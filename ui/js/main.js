@@ -59,30 +59,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         await appWindow.show();
     }, 100);
 
-    // 监听窗口大小变化，更新按钮位置缓存
+    // 监听窗口大小变化，更新按钮位置缓存（使用防抖优化）
+    let resizeTimer;
     window.addEventListener('resize', () => {
-        cachedButtonRects = null;  // 清除缓存，下次使用时重新计算
-    });
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            cachedButtonRects = null;  // 清除缓存，下次使用时重新计算
+        }, 150);
+    }, { passive: true });
 });
 
 // 屏蔽刷新快捷键
 function preventRefresh() {
+    // 使用 Map 提高查找效率
+    const blockedKeys = new Set(['F5']);
+
     document.addEventListener('keydown', (e) => {
-        // F5 或 Ctrl+R 或 Ctrl+Shift+R 刷新
-        if (e.key === 'F5' || 
-            (e.ctrlKey && e.key === 'r') || 
-            (e.ctrlKey && e.shiftKey && e.key === 'R')) {
+        // F5 刷新
+        if (blockedKeys.has(e.key)) {
             e.preventDefault();
             addLog('刷新功能已禁用', 'warning');
             return false;
         }
-        
+
+        // Ctrl+R 或 Ctrl+Shift+R 刷新
+        if (e.ctrlKey && e.key.toLowerCase() === 'r') {
+            e.preventDefault();
+            addLog('刷新功能已禁用', 'warning');
+            return false;
+        }
+
         // Ctrl+W 关闭窗口
-        if (e.ctrlKey && e.key === 'w') {
+        if (e.ctrlKey && e.key.toLowerCase() === 'w') {
             e.preventDefault();
             return false;
         }
-    });
+    }, { passive: false });
 }
 
 // 窗口控制
@@ -256,20 +268,22 @@ async function processBatchFiles(files, mode) {
         addLog('没有找到可处理的文件', 'warning');
         return;
     }
-    
-    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-    addLog(`批量处理模式`, 'info');
-    addLog(`找到 ${files.length} 个文件`, 'info');
-    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-    
+
+    addLog(`批量处理模式 - 找到 ${files.length} 个文件`, 'info');
+
     let successCount = 0;
     let failCount = 0;
-    
+
     // 并行处理，每次最多5个文件
     const batchSize = 5;
     for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, Math.min(i + batchSize, files.length));
-        
+        const batchStart = i + 1;
+        const batchEnd = Math.min(i + batchSize, files.length);
+
+        // 显示进度
+        addLog(`处理进度: ${batchStart}-${batchEnd}/${files.length}`, 'info');
+
         await Promise.all(batch.map(async (file) => {
             try {
                 if (mode === 'compress') {
@@ -283,12 +297,12 @@ async function processBatchFiles(files, mode) {
                 failCount++;
             }
         }));
+
+        // 让出主线程，避免阻塞 UI
+        await new Promise(resolve => setTimeout(resolve, 0));
     }
-    
-    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info', true);
-    addLog(`批量处理完成!`, 'success', true);
-    addLog(`成功: ${successCount} 个，失败: ${failCount} 个`, 'info', true);
-    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info', true);
+
+    addLog(`批量处理完成! 成功: ${successCount} 个，失败: ${failCount} 个`, 'success', true);
 }
 
 // 判断路径是否为文件夹并扫描
@@ -399,18 +413,20 @@ function getDropTarget(position) {
 
 // 为元素设置视觉反馈
 function setupVisualFeedback(element) {
-    ['dragenter', 'dragover'].forEach(eventName => {
-        element.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            element.classList.add('drag-over');
-        }, false);
-    });
+    const handleDragEnter = (e) => {
+        e.preventDefault();
+        element.classList.add('drag-over');
+    };
 
-    ['dragleave', 'drop'].forEach(eventName => {
-        element.addEventListener(eventName, () => {
-            element.classList.remove('drag-over');
-        }, false);
-    });
+    const handleDragLeave = () => {
+        element.classList.remove('drag-over');
+    };
+
+    // 使用被动事件监听器优化性能
+    element.addEventListener('dragenter', handleDragEnter, { passive: false });
+    element.addEventListener('dragover', handleDragEnter, { passive: false });
+    element.addEventListener('dragleave', handleDragLeave, { passive: true });
+    element.addEventListener('drop', handleDragLeave, { passive: true });
 }
 
 // 处理加壳压缩
@@ -551,20 +567,54 @@ async function processUpx(mode, inputFile, outputFile) {
         if (ultraBruteCheckbox.checked) {
             addLog('已启用极限压缩模式', 'info');
         }
-        
+
         if (forceCompressCheckbox.checked) {
             addLog('已启用强制压缩模式', 'warning');
         }
 
         addLog(`开始${mode === 'compress' ? '加壳压缩' : '脱壳解压'}...`, 'info');
-        
+
         const result = await invoke('process_upx', { options });
-        
-        addLog(result, 'success');
-        addLog('操作完成!', 'success', true);
-        
+
+        // 分行显示结果信息
+        const lines = result.split('\n');
+        lines.forEach((line) => {
+            if (line.trim()) {
+                // 根据内容判断日志类型
+                if (line.includes('操作成功') || line.includes('操作完成')) {
+                    addLog(line, 'success', true);
+                } else if (line.includes('输出:') || line.includes('大小:') || line.includes('压缩率:')) {
+                    addLog(line, 'success');
+                } else if (line.includes('UPX 输出:')) {
+                    addLog(line, 'info');
+                } else if (line.includes('扫描') || line.includes('检测')) {
+                    addLog(line, 'warning');
+                } else {
+                    addLog(line, 'info');
+                }
+            }
+        });
+
     } catch (error) {
-        addLog(`处理失败: ${error}`, 'error');
+        // 格式化错误信息，保留换行和特殊字符
+        const errorMsg = String(error);
+
+        // 分行显示错误信息，保持格式
+        const lines = errorMsg.split('\n');
+        lines.forEach((line, index) => {
+            if (line.trim()) {
+                // 错误标题使用 error，解决方案等使用 warning
+                if (line.includes('[错误]')) {
+                    addLog(line, 'error');
+                } else if (line.includes('解决方案:') || line.includes('可能原因:')) {
+                    addLog(line, 'warning');
+                } else if (line.trim().startsWith('-')) {
+                    addLog(line, 'info');
+                } else {
+                    addLog(line, index === 0 ? 'error' : 'warning');
+                }
+            }
+        });
     }
 }
 
@@ -578,6 +628,9 @@ async function handleRefreshIcon() {
         addLog(`刷新失败: ${error}`, 'error');
     }
 }
+
+// 日志初始化标志
+let logInitialized = false;
 
 // 添加日志
 function addLog(message, type = 'info', highlight = false) {
@@ -593,15 +646,18 @@ function addLog(message, type = 'info', highlight = false) {
 
     logLine.textContent = `[${timestamp}] ${message}`;
 
-    // 清除初始提示
-    if (logOutput.querySelector('.text-gray-500')) {
+    // 清除初始提示（只执行一次）
+    if (!logInitialized) {
         logOutput.innerHTML = '';
+        logInitialized = true;
     }
 
     logOutput.appendChild(logLine);
 
-    // 自动滚动到底部
-    logOutput.scrollTop = logOutput.scrollHeight;
+    // 使用 requestAnimationFrame 优化滚动性能
+    requestAnimationFrame(() => {
+        logOutput.scrollTop = logOutput.scrollHeight;
+    });
 }
 
 // 保存当前配置
