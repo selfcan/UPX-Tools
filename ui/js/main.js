@@ -6,6 +6,21 @@ const { listen } = window.__TAURI__.event;
 // 获取当前窗口实例
 const appWindow = getCurrentWindow();
 
+// 性能配置：动态批处理大小
+const PERFORMANCE_CONFIG = {
+    cpuCores: navigator.hardwareConcurrency || 4,  // CPU逻辑核心数
+    batchSize: null  // 将在初始化时计算
+};
+
+// 计算最优批处理大小
+function calculateOptimalBatchSize() {
+    // 根据CPU核心数计算：每个核心处理1-2个任务
+    // 最小为2，最大为16（避免过度并发）
+    const optimal = Math.max(2, Math.min(PERFORMANCE_CONFIG.cpuCores * 2, 16));
+    PERFORMANCE_CONFIG.batchSize = optimal;
+    return optimal;
+}
+
 // DOM 元素
 const compressBtn = document.getElementById('compress-btn');
 const decompressBtn = document.getElementById('decompress-btn');
@@ -31,6 +46,9 @@ const closeBtn = document.getElementById('titlebar-close');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
+    // 初始化性能配置
+    calculateOptimalBatchSize();
+    
     initWindowControls();
     initOperationButtons();
     initCompressionLevelSlider();
@@ -270,12 +288,13 @@ async function processBatchFiles(files, mode) {
     }
 
     addLog(`批量处理模式 - 找到 ${files.length} 个文件`, 'info');
+    addLog(`使用 ${PERFORMANCE_CONFIG.batchSize} 并发处理（CPU核心: ${PERFORMANCE_CONFIG.cpuCores}）`, 'info');
 
     let successCount = 0;
     let failCount = 0;
 
-    // 并行处理，每次最多5个文件
-    const batchSize = 5;
+    // 动态并行处理，根据CPU核心数自动调整
+    const batchSize = PERFORMANCE_CONFIG.batchSize;
     for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, Math.min(i + batchSize, files.length));
         const batchStart = i + 1;
@@ -632,6 +651,12 @@ async function handleRefreshIcon() {
 // 日志初始化标志
 let logInitialized = false;
 
+// 日志管理配置
+const LOG_CONFIG = {
+    MAX_LOGS: 1000,  // 最大日志条数
+    TRIM_COUNT: 200  // 超出时一次删除的条数
+};
+
 // 添加日志
 function addLog(message, type = 'info', highlight = false) {
     const logLine = document.createElement('div');
@@ -653,6 +678,17 @@ function addLog(message, type = 'info', highlight = false) {
     }
 
     logOutput.appendChild(logLine);
+
+    // 日志数量管理：超过最大值时删除旧日志
+    const logCount = logOutput.children.length;
+    if (logCount > LOG_CONFIG.MAX_LOGS) {
+        // 批量删除旧日志以提升性能
+        for (let i = 0; i < LOG_CONFIG.TRIM_COUNT; i++) {
+            if (logOutput.firstChild) {
+                logOutput.removeChild(logOutput.firstChild);
+            }
+        }
+    }
 
     // 使用 requestAnimationFrame 优化滚动性能
     requestAnimationFrame(() => {
