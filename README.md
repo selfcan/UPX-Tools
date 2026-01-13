@@ -76,12 +76,41 @@
 ### 安装依赖
 
 ```bash
+# 安装前端开发依赖（ESLint + Prettier）
+npm install
+
 # 安装 Tauri CLI
 cargo install tauri-cli
 
 # 或使用 npm
 npm install -g @tauri-apps/cli
 ```
+
+### 代码检查与格式化
+
+项目使用 ESLint 和 Prettier 进行代码质量控制：
+
+```bash
+# 检查代码问题
+npm run lint
+
+# 自动修复代码问题
+npm run lint:fix
+
+# 格式化代码
+npm run format
+
+# 检查代码格式
+npm run format:check
+
+# 完整检查（lint + format）
+npm run check
+```
+
+**代码规范**：
+- 缩进：4 空格
+- 字符串：单引号
+- 结尾：无分号
 
 ### 项目结构
 
@@ -94,8 +123,11 @@ UPX-GUI/
 ├── src-tauri/         # Rust 后端
 │   ├── src/           # Rust 源码
 │   └── tauri.conf.json # Tauri 配置
-└── upx/               # UPX 工具
-    └── upx.exe        # UPX 可执行文件
+├── upx/               # UPX 工具
+│   └── upx.exe        # UPX 可执行文件
+├── .eslintrc.json     # ESLint 配置
+├── .prettierrc.json   # Prettier 配置
+└── package.json       # npm 依赖配置
 ```
 
 ## 编译方法

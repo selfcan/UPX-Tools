@@ -23,15 +23,27 @@
 }
 
 body {
-    font-family: 'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
-        'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-family:
+        'HarmonyOS Sans SC',
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        'Roboto',
+        'Oxygen',
+        'Ubuntu',
+        'Cantarell',
+        'Fira Sans',
+        'Droid Sans',
+        'Helvetica Neue',
+        sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
 /* 呼吸灯效果 */
 @keyframes breathing {
-    0%, 100% {
+    0%,
+    100% {
         opacity: 1;
         transform: scale(1);
     }
@@ -168,23 +180,24 @@ button:active {
 }
 
 /* 输入框聚焦效果 */
-input:focus, select:focus {
+input:focus,
+select:focus {
     outline: none;
 }
 
 /* 自定义复选框 */
-input[type="checkbox"] {
+input[type='checkbox'] {
     cursor: pointer;
     outline: none;
 }
 
-input[type="checkbox"]:focus {
+input[type='checkbox']:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* 滑动条样式 */
-input[type="range"].slider {
+input[type='range'].slider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -196,12 +209,12 @@ input[type="range"].slider {
     font-family: inherit;
 }
 
-input[type="range"].slider:hover {
+input[type='range'].slider:hover {
     opacity: 0.9;
 }
 
 /* 滑块样式 - Webkit浏览器 */
-input[type="range"].slider::-webkit-slider-thumb {
+input[type='range'].slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 24px;
@@ -214,18 +227,18 @@ input[type="range"].slider::-webkit-slider-thumb {
     transition: all 0.2s;
 }
 
-input[type="range"].slider::-webkit-slider-thumb:hover {
+input[type='range'].slider::-webkit-slider-thumb:hover {
     transform: scale(1.1);
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
 }
 
-input[type="range"].slider::-webkit-slider-thumb:active {
+input[type='range'].slider::-webkit-slider-thumb:active {
     transform: scale(1.05);
     background: #eff6ff;
 }
 
 /* 滑块样式 - Firefox */
-input[type="range"].slider::-moz-range-thumb {
+input[type='range'].slider::-moz-range-thumb {
     width: 24px;
     height: 24px;
     background: white;
@@ -236,12 +249,12 @@ input[type="range"].slider::-moz-range-thumb {
     transition: all 0.2s;
 }
 
-input[type="range"].slider::-moz-range-thumb:hover {
+input[type='range'].slider::-moz-range-thumb:hover {
     transform: scale(1.1);
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
 }
 
-input[type="range"].slider::-moz-range-thumb:active {
+input[type='range'].slider::-moz-range-thumb:active {
     transform: scale(1.05);
     background: #eff6ff;
 }

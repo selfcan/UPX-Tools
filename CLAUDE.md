@@ -29,6 +29,12 @@ cargo tauri build
 # 编译产物位置
 # src-tauri/target/release/bundle/
 # 生成 MSI 和 NSIS 两种安装包
+
+# 前端代码检查
+npm run lint          # 检查代码问题
+npm run lint:fix      # 自动修复
+npm run format        # 格式化代码
+npm run check         # 完整检查
 ```
 
 ## 代码结构
@@ -70,3 +76,19 @@ batchSize = Math.max(2, Math.min(cpuCores * 2, 16))
 - 使用 `window.__TAURI__` 全局对象（需启用 `withGlobalTauri: true`）
 - 命令调用：`invoke('command_name', { options })`
 - 拖放事件：`listen('tauri://drag-drop', handler)`
+
+## 代码规范
+
+### 前端 (JavaScript/HTML/CSS)
+- **缩进**：4 空格
+- **字符串**：单引号优先
+- **分号**：不使用分号结尾
+- **命名**：
+  - 常量：`UPPER_SNAKE_CASE`
+  - 函数/变量：`camelCase`
+  - DOM ID：`kebab-case`
+- **修改前端代码后必须运行**：`npm run format`
+
+### 后端 (Rust)
+- 使用 `cargo fmt` 格式化
+- 使用 `cargo clippy` 检查代码质量
