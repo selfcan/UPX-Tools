@@ -3,19 +3,14 @@ const { open, save } = window.__TAURI__.dialog;
 const { getCurrentWindow } = window.__TAURI__.window;
 const { listen } = window.__TAURI__.event;
 
-// 获取当前窗口实例
 const appWindow = getCurrentWindow();
 
-// 性能配置：动态批处理大小
 const PERFORMANCE_CONFIG = {
-    cpuCores: navigator.hardwareConcurrency || 4,  // CPU逻辑核心数
-    batchSize: null  // 将在初始化时计算
+    cpuCores: navigator.hardwareConcurrency || 4,
+    batchSize: null
 };
 
-// 计算最优批处理大小
 function calculateOptimalBatchSize() {
-    // 根据CPU核心数计算：每个核心处理1-2个任务
-    // 最小为2，最大为16（避免过度并发）
     const optimal = Math.max(2, Math.min(PERFORMANCE_CONFIG.cpuCores * 2, 16));
     PERFORMANCE_CONFIG.batchSize = optimal;
     return optimal;
@@ -87,30 +82,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, { passive: true });
 });
 
-// 屏蔽刷新快捷键
 function preventRefresh() {
-    // 使用 Map 提高查找效率
-    const blockedKeys = new Set(['F5']);
+    const BLOCKED_COMBINATIONS = [
+        { key: 'F5', message: '刷新功能已禁用' },
+        { ctrlKey: true, key: 'r', message: '刷新功能已禁用' },
+        { ctrlKey: true, key: 'w', message: null }
+    ];
 
     document.addEventListener('keydown', (e) => {
-        // F5 刷新
-        if (blockedKeys.has(e.key)) {
-            e.preventDefault();
-            addLog('刷新功能已禁用', 'warning');
-            return false;
-        }
+        for (const combo of BLOCKED_COMBINATIONS) {
+            const isMatch = combo.ctrlKey
+                ? e.ctrlKey && e.key.toLowerCase() === combo.key
+                : e.key === combo.key;
 
-        // Ctrl+R 或 Ctrl+Shift+R 刷新
-        if (e.ctrlKey && e.key.toLowerCase() === 'r') {
-            e.preventDefault();
-            addLog('刷新功能已禁用', 'warning');
-            return false;
-        }
-
-        // Ctrl+W 关闭窗口
-        if (e.ctrlKey && e.key.toLowerCase() === 'w') {
-            e.preventDefault();
-            return false;
+            if (isMatch) {
+                e.preventDefault();
+                if (combo.message) addLog(combo.message, 'warning');
+                return false;
+            }
         }
     }, { passive: false });
 }
@@ -147,78 +136,48 @@ function initTitleClick() {
     });
 }
 
-// 操作按钮初始化
 function initOperationButtons() {
-    // 刷新图标缓存按钮
-    refreshIconBtn.addEventListener('click', async () => {
-        await handleRefreshIcon();
-    });
+    refreshIconBtn.addEventListener('click', handleRefreshIcon);
+    settingsBtn.addEventListener('click', showSettingsModal);
+    closeSettingsBtn.addEventListener('click', handleCloseSettings);
+    settingsModal.addEventListener('click', handleModalBackdropClick);
 
-    // 设置按钮 - 显示全局设置
-    settingsBtn.addEventListener('click', () => {
-        showSettingsModal();
-    });
+    compressBtn.addEventListener('click', () => handleOperationClick('compress'));
+    decompressBtn.addEventListener('click', () => handleOperationClick('decompress'));
+}
 
-    // 关闭设置按钮
-    closeSettingsBtn.addEventListener('click', async () => {
+async function handleCloseSettings() {
+    await saveCurrentConfig();
+    hideSettingsModal();
+    addLog('设置已保存', 'success');
+}
+
+async function handleModalBackdropClick(e) {
+    if (e.target === settingsModal) {
         await saveCurrentConfig();
         hideSettingsModal();
-        addLog('设置已保存', 'success');
-    });
+    }
+}
 
-    // 点击背景关闭弹窗
-    settingsModal.addEventListener('click', async (e) => {
-        if (e.target === settingsModal) {
-            await saveCurrentConfig();
-            hideSettingsModal();
-        }
-    });
+async function handleOperationClick(mode) {
+    const modeName = mode === 'compress' ? '加壳压缩' : '脱壳解压';
+    const processFile = mode === 'compress' ? handleCompressWithFile : handleDecompressWithFile;
+    const selectFile = mode === 'compress' ? handleCompress : handleDecompress;
 
-    // 加壳压缩按钮 - 直接执行
-    compressBtn.addEventListener('click', async () => {
-        // 检查是否有多个文件
-        if (window.droppedFiles && window.droppedFiles.length > 0) {
-            const files = window.droppedFiles;
-            window.droppedFiles = null;
-            addLog('开始批量加壳压缩...', 'info');
-            await processBatchFiles(files, 'compress');
-        }
-        // 检查是否有单个文件
-        else if (window.droppedFile) {
-            const filePath = window.droppedFile;
-            window.droppedFile = null;
-            addLog('开始加壳压缩...', 'info');
-            await handleCompressWithFile(filePath);
-        } 
-        // 没有拖放文件，弹出选择
-        else {
-            addLog('选择文件进行加壳...', 'info');
-            await handleCompress();
-        }
-    });
-
-    // 脱壳解压按钮 - 直接执行
-    decompressBtn.addEventListener('click', async () => {
-        // 检查是否有多个文件
-        if (window.droppedFiles && window.droppedFiles.length > 0) {
-            const files = window.droppedFiles;
-            window.droppedFiles = null;
-            addLog('开始批量脱壳解压...', 'info');
-            await processBatchFiles(files, 'decompress');
-        }
-        // 检查是否有单个文件
-        else if (window.droppedFile) {
-            const filePath = window.droppedFile;
-            window.droppedFile = null;
-            addLog('开始脱壳解压...', 'info');
-            await handleDecompressWithFile(filePath);
-        } 
-        // 没有拖放文件，弹出选择
-        else {
-            addLog('选择文件进行脱壳...', 'info');
-            await handleDecompress();
-        }
-    });
+    if (window.droppedFiles?.length > 0) {
+        const files = window.droppedFiles;
+        window.droppedFiles = null;
+        addLog(`开始批量${modeName}...`, 'info');
+        await processBatchFiles(files, mode);
+    } else if (window.droppedFile) {
+        const filePath = window.droppedFile;
+        window.droppedFile = null;
+        addLog(`开始${modeName}...`, 'info');
+        await processFile(filePath);
+    } else {
+        addLog(`选择文件进行${modeName === '加壳压缩' ? '加壳' : '脱壳'}...`, 'info');
+        await selectFile();
+    }
 }
 
 // 级别描述映射（全局常量）
@@ -280,7 +239,6 @@ async function scanFolder(folderPath, includeSubfolders) {
     }
 }
 
-// 批量处理文件
 async function processBatchFiles(files, mode) {
     if (files.length === 0) {
         addLog('没有找到可处理的文件', 'warning');
@@ -290,104 +248,99 @@ async function processBatchFiles(files, mode) {
     addLog(`批量处理模式 - 找到 ${files.length} 个文件`, 'info');
     addLog(`使用 ${PERFORMANCE_CONFIG.batchSize} 并发处理（CPU核心: ${PERFORMANCE_CONFIG.cpuCores}）`, 'info');
 
+    const handler = mode === 'compress' ? handleCompressWithFile : handleDecompressWithFile;
     let successCount = 0;
     let failCount = 0;
-
-    // 动态并行处理，根据CPU核心数自动调整
     const batchSize = PERFORMANCE_CONFIG.batchSize;
+
     for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, Math.min(i + batchSize, files.length));
-        const batchStart = i + 1;
-        const batchEnd = Math.min(i + batchSize, files.length);
-
-        // 显示进度
-        addLog(`处理进度: ${batchStart}-${batchEnd}/${files.length}`, 'info');
+        addLog(`处理进度: ${i + 1}-${Math.min(i + batchSize, files.length)}/${files.length}`, 'info');
 
         await Promise.all(batch.map(async (file) => {
             try {
-                if (mode === 'compress') {
-                    await handleCompressWithFile(file);
-                } else {
-                    await handleDecompressWithFile(file);
-                }
+                await handler(file);
                 successCount++;
-            } catch (error) {
+            } catch {
                 addLog(`处理失败: ${file}`, 'error');
                 failCount++;
             }
         }));
 
-        // 让出主线程，避免阻塞 UI
         await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     addLog(`批量处理完成! 成功: ${successCount} 个，失败: ${failCount} 个`, 'success', true);
 }
 
-// 判断路径是否为文件夹并扫描
 async function checkAndScanPath(path) {
-    // 尝试扫描文件夹
     const files = await scanFolder(path, includeSubfoldersCheckbox.checked);
-    
+
     if (files.length > 0) {
-        // 是文件夹，返回扫描到的文件
         addLog(`扫描文件夹: ${path} (找到 ${files.length} 个文件)`, 'info');
         return files;
+    }
+
+    const extension = path.toLowerCase();
+    if (extension.endsWith('.exe') || extension.endsWith('.dll')) {
+        return [path];
+    }
+
+    return [];
+}
+
+async function setupDragAndDrop() {
+    await listen('tauri://drag-drop', handleDragDrop);
+    setupVisualFeedback(compressBtn);
+    setupVisualFeedback(decompressBtn);
+}
+
+async function handleDragDrop(event) {
+    const { paths, position } = event.payload;
+
+    if (!paths?.length) return;
+
+    const allFiles = await collectFiles(paths);
+
+    if (allFiles.length === 0) {
+        addLog('未找到 .exe 或 .dll 文件', 'warning');
+        return;
+    }
+
+    await processDropByTarget(allFiles, position);
+}
+
+async function collectFiles(paths) {
+    const allFiles = [];
+    for (const path of paths) {
+        const files = await checkAndScanPath(path);
+        allFiles.push(...files);
+    }
+    return allFiles;
+}
+
+async function processDropByTarget(files, position) {
+    const dropTarget = getDropTarget(position);
+
+    if (dropTarget === 'compress') {
+        addLog('检测到拖放至加壳区域', 'info');
+        await processBatchFiles(files, 'compress');
+    } else if (dropTarget === 'decompress') {
+        addLog('检测到拖放至脱壳区域', 'info');
+        await processBatchFiles(files, 'decompress');
     } else {
-        // 不是文件夹或没有找到文件，检查是否是exe/dll文件
-        if (path.toLowerCase().endsWith('.exe') || path.toLowerCase().endsWith('.dll')) {
-            return [path];
-        }
-        return [];
+        storeFilesForLater(files);
     }
 }
 
-// 设置文件拖放功能
-async function setupDragAndDrop() {
-    // 监听文件拖放释放事件
-    await listen('tauri://drag-drop', async (event) => {
-        const paths = event.payload.paths;
-        const position = event.payload.position;
-        
-        if (paths && paths.length > 0) {
-            // 收集所有文件
-            const allFiles = [];
-            
-            for (const path of paths) {
-                const files = await checkAndScanPath(path);
-                allFiles.push(...files);
-            }
-            
-            if (allFiles.length === 0) {
-                addLog('未找到 .exe 或 .dll 文件', 'warning');
-                return;
-            }
-            
-            // 判断拖放位置，自动触发对应操作
-            const dropTarget = getDropTarget(position);
-            
-            if (dropTarget === 'compress') {
-                addLog('检测到拖放至加壳区域', 'info');
-                await processBatchFiles(allFiles, 'compress');
-            } else if (dropTarget === 'decompress') {
-                addLog('检测到拖放至脱壳区域', 'info');
-                await processBatchFiles(allFiles, 'decompress');
-            } else {
-                // 拖放到其他位置，存储文件等待用户选择
-                if (allFiles.length === 1) {
-                    addLog('请点击"加壳压缩"或"脱壳解压"按钮', 'info');
-                    window.droppedFile = allFiles[0];
-                } else {
-                    addLog(`已选择 ${allFiles.length} 个文件，请点击操作按钮`, 'info');
-                    window.droppedFiles = allFiles;
-                }
-            }
-        }
-    });
-
-    // 为按钮添加视觉反馈
-    setupVisualFeedback(compressBtn);
-    setupVisualFeedback(decompressBtn);
+function storeFilesForLater(files) {
+    if (files.length === 1) {
+        addLog('请点击"加壳压缩"或"脱壳解压"按钮', 'info');
+        window.droppedFile = files[0];
+    } else {
+        addLog(`已选择 ${files.length} 个文件，请点击操作按钮`, 'info');
+        window.droppedFiles = files;
+    }
 }
 
 // 缓存按钮位置信息
@@ -401,32 +354,27 @@ function updateButtonRectsCache() {
     };
 }
 
-// 判断拖放位置对应的目标
+function isPointInRect(x, y, rect) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
 function getDropTarget(position) {
     if (!position) return null;
-    
-    // 如果缓存不存在，创建缓存
+
     if (!cachedButtonRects) {
         updateButtonRectsCache();
     }
-    
-    const x = position.x;
-    const y = position.y;
-    
-    // 检查是否在加壳压缩按钮范围内
-    const compressRect = cachedButtonRects.compress;
-    if (x >= compressRect.left && x <= compressRect.right &&
-        y >= compressRect.top && y <= compressRect.bottom) {
+
+    const { x, y } = position;
+
+    if (isPointInRect(x, y, cachedButtonRects.compress)) {
         return 'compress';
     }
-    
-    // 检查是否在脱壳解压按钮范围内
-    const decompressRect = cachedButtonRects.decompress;
-    if (x >= decompressRect.left && x <= decompressRect.right &&
-        y >= decompressRect.top && y <= decompressRect.bottom) {
+
+    if (isPointInRect(x, y, cachedButtonRects.decompress)) {
         return 'decompress';
     }
-    
+
     return null;
 }
 
@@ -448,16 +396,19 @@ function setupVisualFeedback(element) {
     element.addEventListener('drop', handleDragLeave, { passive: true });
 }
 
-// 处理加壳压缩
 async function handleCompress() {
+    await handleFileSelect('compress');
+}
+
+async function handleDecompress() {
+    await handleFileSelect('decompress');
+}
+
+async function handleFileSelect(mode) {
     try {
-        // 选择文件（支持多选）
         const selected = await open({
             multiple: true,
-            filters: [{
-                name: '可执行文件',
-                extensions: ['exe', 'dll']
-            }]
+            filters: [{ name: '可执行文件', extensions: ['exe', 'dll'] }]
         });
 
         if (!selected || (Array.isArray(selected) && selected.length === 0)) {
@@ -465,44 +416,35 @@ async function handleCompress() {
             return;
         }
 
-        // 处理选择结果（可能是单个路径或路径数组）
         const files = Array.isArray(selected) ? selected : [selected];
-        
-        // 批量处理或单文件处理
+
         if (files.length === 1) {
             addLog(`选择文件: ${files[0]}`, 'info');
-            await handleCompressWithFile(files[0]);
+            const handler = mode === 'compress' ? handleCompressWithFile : handleDecompressWithFile;
+            await handler(files[0]);
         } else {
             addLog(`选择了 ${files.length} 个文件`, 'info');
-            await processBatchFiles(files, 'compress');
+            await processBatchFiles(files, mode);
         }
     } catch (error) {
         addLog(`操作失败: ${error}`, 'error');
     }
 }
 
-// 使用指定文件处理加壳压缩
 async function handleCompressWithFile(inputFile) {
     try {
-
         let outputFile;
-        
-        // 根据覆盖选项决定输出文件
+
         if (overwriteCheckbox.checked) {
             outputFile = inputFile;
             addLog('将覆盖原文件', 'info');
         } else {
-            // 自动生成输出文件名
             const ext = inputFile.substring(inputFile.lastIndexOf('.'));
             const baseName = inputFile.substring(0, inputFile.lastIndexOf('.'));
             const defaultOutput = `${baseName}_packed${ext}`;
 
-            // 选择输出位置
             outputFile = await save({
-                filters: [{
-                    name: '可执行文件',
-                    extensions: ['exe', 'dll']
-                }],
+                filters: [{ name: '可执行文件', extensions: ['exe', 'dll'] }],
                 defaultPath: defaultOutput
             });
 
@@ -514,67 +456,25 @@ async function handleCompressWithFile(inputFile) {
             addLog(`输出文件: ${outputFile}`, 'info');
         }
 
-        // 执行压缩
         await processUpx('compress', inputFile, outputFile);
-
     } catch (error) {
         addLog(`操作失败: ${error}`, 'error');
     }
 }
 
-// 处理脱壳解压
-async function handleDecompress() {
-    try {
-        // 选择文件（支持多选）
-        const selected = await open({
-            multiple: true,
-            filters: [{
-                name: '可执行文件',
-                extensions: ['exe', 'dll']
-            }]
-        });
-
-        if (!selected || (Array.isArray(selected) && selected.length === 0)) {
-            addLog('未选择文件', 'warning');
-            return;
-        }
-
-        // 处理选择结果（可能是单个路径或路径数组）
-        const files = Array.isArray(selected) ? selected : [selected];
-        
-        // 批量处理或单文件处理
-        if (files.length === 1) {
-            addLog(`选择文件: ${files[0]}`, 'info');
-            await handleDecompressWithFile(files[0]);
-        } else {
-            addLog(`选择了 ${files.length} 个文件`, 'info');
-            await processBatchFiles(files, 'decompress');
-        }
-    } catch (error) {
-        addLog(`操作失败: ${error}`, 'error');
-    }
-}
-
-// 使用指定文件处理脱壳解压
 async function handleDecompressWithFile(inputFile) {
     try {
-        // 脱壳默认覆盖原文件（直接恢复原状）
-        const outputFile = inputFile;
         addLog('将覆盖原文件', 'info');
-
-        // 执行解压
-        await processUpx('decompress', inputFile, outputFile);
-
+        await processUpx('decompress', inputFile, inputFile);
     } catch (error) {
         addLog(`操作失败: ${error}`, 'error');
     }
 }
 
-// 执行 UPX 处理
 async function processUpx(mode, inputFile, outputFile) {
     try {
         const options = {
-            mode: mode,
+            mode,
             input_file: inputFile,
             output_file: outputFile,
             compression_level: getCompressionLevel(),
@@ -591,50 +491,58 @@ async function processUpx(mode, inputFile, outputFile) {
             addLog('已启用强制压缩模式', 'warning');
         }
 
-        addLog(`开始${mode === 'compress' ? '加壳压缩' : '脱壳解压'}...`, 'info');
+        const actionName = mode === 'compress' ? '加壳压缩' : '脱壳解压';
+        addLog(`开始${actionName}...`, 'info');
 
         const result = await invoke('process_upx', { options });
-
-        // 分行显示结果信息
-        const lines = result.split('\n');
-        lines.forEach((line) => {
-            if (line.trim()) {
-                // 根据内容判断日志类型
-                if (line.includes('操作成功') || line.includes('操作完成')) {
-                    addLog(line, 'success', true);
-                } else if (line.includes('输出:') || line.includes('大小:') || line.includes('压缩率:')) {
-                    addLog(line, 'success');
-                } else if (line.includes('UPX 输出:')) {
-                    addLog(line, 'info');
-                } else if (line.includes('扫描') || line.includes('检测')) {
-                    addLog(line, 'warning');
-                } else {
-                    addLog(line, 'info');
-                }
-            }
-        });
+        parseProcessResult(result);
 
     } catch (error) {
-        // 格式化错误信息，保留换行和特殊字符
-        const errorMsg = String(error);
-
-        // 分行显示错误信息，保持格式
-        const lines = errorMsg.split('\n');
-        lines.forEach((line, index) => {
-            if (line.trim()) {
-                // 错误标题使用 error，解决方案等使用 warning
-                if (line.includes('[错误]')) {
-                    addLog(line, 'error');
-                } else if (line.includes('解决方案:') || line.includes('可能原因:')) {
-                    addLog(line, 'warning');
-                } else if (line.trim().startsWith('-')) {
-                    addLog(line, 'info');
-                } else {
-                    addLog(line, index === 0 ? 'error' : 'warning');
-                }
-            }
-        });
+        parseProcessError(String(error));
     }
+}
+
+function parseProcessResult(result) {
+    const LOG_PATTERNS = [
+        { patterns: ['操作成功', '操作完成'], type: 'success', highlight: true },
+        { patterns: ['输出:', '大小:', '压缩率:'], type: 'success', highlight: false },
+        { patterns: ['UPX 输出:'], type: 'info', highlight: false },
+        { patterns: ['扫描', '检测'], type: 'warning', highlight: false }
+    ];
+
+    result.split('\n').forEach((line) => {
+        if (!line.trim()) return;
+
+        const match = LOG_PATTERNS.find(({ patterns }) =>
+            patterns.some(p => line.includes(p))
+        );
+
+        if (match) {
+            addLog(line, match.type, match.highlight);
+        } else {
+            addLog(line, 'info');
+        }
+    });
+}
+
+function parseProcessError(errorMsg) {
+    const ERROR_PATTERNS = [
+        { test: (s) => s.includes('[错误]'), type: 'error' },
+        { test: (s) => s.includes('解决方案:') || s.includes('可能原因:'), type: 'warning' },
+        { test: (s) => s.trim().startsWith('-'), type: 'info' }
+    ];
+
+    errorMsg.split('\n').forEach((line, index) => {
+        if (!line.trim()) return;
+
+        const match = ERROR_PATTERNS.find(({ test }) => test(line));
+
+        if (match) {
+            addLog(line, match.type);
+        } else {
+            addLog(line, index === 0 ? 'error' : 'warning');
+        }
+    });
 }
 
 // 刷新图标缓存
@@ -696,7 +604,6 @@ function addLog(message, type = 'info', highlight = false) {
     });
 }
 
-// 保存当前配置
 async function saveCurrentConfig() {
     try {
         const config = {
@@ -714,22 +621,20 @@ async function saveCurrentConfig() {
     }
 }
 
-// 加载保存的配置
+function applyConfigToUI(config) {
+    compressionLevel.value = config.compression_level;
+    overwriteCheckbox.checked = config.overwrite;
+    backupCheckbox.checked = config.backup;
+    ultraBruteCheckbox.checked = config.ultra_brute;
+    includeSubfoldersCheckbox.checked = config.include_subfolders;
+    forceCompressCheckbox.checked = config.force_compress;
+    updateLevelDisplay(config.compression_level);
+}
+
 async function loadSavedConfig() {
     try {
         const config = await invoke('load_config');
-
-        // 应用配置到界面
-        compressionLevel.value = config.compression_level;
-        overwriteCheckbox.checked = config.overwrite;
-        backupCheckbox.checked = config.backup;
-        ultraBruteCheckbox.checked = config.ultra_brute;
-        includeSubfoldersCheckbox.checked = config.include_subfolders;
-        forceCompressCheckbox.checked = config.force_compress;
-
-        // 更新压缩级别显示（复用现有函数）
-        updateLevelDisplay(config.compression_level);
-
+        applyConfigToUI(config);
         addLog('已加载上次保存的配置', 'info');
     } catch (error) {
         console.error('加载配置失败:', error);
